@@ -3,7 +3,8 @@ defmodule Table do
   Unified access to tabular data.
 
   This module provides a thin layer that unifies access to tabular data
-  in different formats, supporting both row-based and column-based access.
+  in different formats, supporting both row-based and column-based access.  This is an
+  implementation of the Table.Reader protocol.
   """
 
   @type column :: term()
@@ -78,20 +79,6 @@ defmodule Table do
       :none ->
         raise ArgumentError, "Given data is not tabular"
     end
-  end
-
-  @doc false
-  @deprecated "Use to_columns/2 instead"
-  def to_columns_with_info(tabular, opts \\ []) do
-    {columns, info} = to_columns(tabular, opts)
-    {columns, Map.new(info)}
-  end
-
-  @doc false
-  @deprecated "Use to_rows/2 instead"
-  def to_rows_with_info(tabular, opts \\ []) do
-    {rows, info} = to_rows(tabular, opts)
-    {rows, Map.new(info)}
   end
 
   defp filter_columns(columns, only) do
