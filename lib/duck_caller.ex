@@ -4,16 +4,9 @@ defmodule DuckCaller do
   """
 
   @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> InforDmf.hello()
-      :world
-
+  Create a new DuckDB instance with two extensions, one for Excel and the other for Json.
   """
   def create!(db_name, opts \\ [{:core_extensions, ["spatial", "json"]}]) do
-    # TODO: need to make it so multiple extensions can be added
     {:ok, conn} = connect!(db_name)
 
     if opts[:core_extensions] do

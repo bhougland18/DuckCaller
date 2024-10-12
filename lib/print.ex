@@ -1,6 +1,10 @@
 defmodule DuckCaller.Print do
   @default_sample_nrows 5
-  # TODO: change "res" to a tabular Table.Reader structure
+  # TODO: change "res" to a tabular Table.Reader structure.  This will help with the problem of too many columns if :limit is used.
+  # TODO: Calculate the number of columns to display dependant on screen resolution.
+  @doc """
+  Function takes a map and prints an ascii table of the data.
+  """
   def to_term(res, conn, opts \\ []) do
     headers =
       res
