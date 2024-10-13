@@ -1,4 +1,7 @@
 defmodule DuckCaller.IO do
+  @doc """
+  Creates DuckDB tables from Excel Sheets.  A table will be created for each sheet.
+  """
   def from_excel!(conn, path) do
     {:ok, package} = XlsxReader.open(path)
     sheets = XlsxReader.sheet_names(package)
@@ -25,9 +28,10 @@ defmodule DuckCaller.IO do
     {:ok, IO.puts("#{sheet} has been loaded into the database!")}
   end
 
-  # def to_excel!(conn, path, data) do
-  # end
-
+  # TODO: depreciate this as it is only a one table to one worksheet approach.  Look into the Exceed library instead.
+  @doc """
+  Create an Excel file for a given DuckDB Table
+  """
   def to_excel!(conn, path, table) do
     Duckdbex.query(conn, "LOAD 'spatial';")
 
