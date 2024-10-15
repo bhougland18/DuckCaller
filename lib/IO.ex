@@ -39,8 +39,4 @@ defmodule DuckCaller.IO do
     COPY (SELECT * FROM #{table}) TO '#{path}' WITH (FORMAT GDAL, DRIVER 'xlsx');
     """)
   end
-
-  # def stream_to_excel!() do
-  #   IO.puts("I don't do anything.")
-  # end
 end

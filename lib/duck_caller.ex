@@ -31,9 +31,14 @@ defmodule DuckCaller do
     Duckdbex.query(conn, "INSTALL '#{extension}';")
   end
 
+  @spec connect!() :: term()
   def connect!() do
-    {:ok, db} = Duckdbex.open()
-    {:ok, _conn} = Duckdbex.connection(db)
+    with {:ok, db} <- Duckdbex.open(),
+         {:ok, conn} <- Duckdbex.connection(db) do
+      conn
+    else
+      {:error, reason} -> raise "Connection failed: #{reason}"
+    end
   end
 
   # TODO: have the arguement checked between string and struct (for config with in memory database)
@@ -58,5 +63,75 @@ defmodule DuckCaller do
       end)
 
     tabular
+  end
+
+  defp transaction(conn, fun) do
+    try do
+      {:ok, _} = Duckdbex.query(conn, "BEGIN TRANSACTION;")
+      result = fun.()
+
+      case result do
+        {:ok, _} ->
+          {:ok, _} = Duckdbex.query(conn, "COMMIT;")
+          result
+
+        {:error, _} = error ->
+          {:ok, _} = Duckdbex.query(conn, "ROLLBACK;")
+          error
+      end
+    rescue
+      e ->
+        {:ok, _} = Duckdbex.query(conn, "ROLLBACK;")
+        {:error, e}
+    end
+  end
+
+  def batch_update(conn, updates, opts \\ []) when is_list(updates) do
+    max_concurrency = Keyword.get(opts, :max_concurrency, System.schedulers_online() * 2)
+    timeout = Keyword.get(opts, :timeout, 30_000)
+
+    transaction(conn, fn ->
+      results =
+        Task.async_stream(
+          updates,
+          fn update_map ->
+            with {:ok, table} <- Map.fetch(update_map, :table),
+                 {:ok, field} <- Map.fetch(update_map, :field),
+                 {:ok, value} <- Map.fetch(update_map, :value) do
+              simple_update(conn, table, field, value)
+            else
+              :error -> {:error, {:missing_key, update_map}}
+            end
+          end,
+          max_concurrency: max_concurrency,
+          timeout: timeout
+        )
+        |> Enum.map(fn {:ok, result} -> result end)
+
+      failures =
+        Enum.filter(results, fn
+          {:error, _} -> true
+          _ -> false
+        end)
+
+      if Enum.empty?(failures) do
+        {:ok, results}
+      else
+        {:error, failures}
+      end
+    end)
+  end
+
+  defp format_value(value) when is_binary(value), do: "'#{String.replace(value, "'", "''")}'"
+  defp format_value(value), do: to_string(value)
+
+  # TODO: trade this out with AyeSQL query so we don't have injection attack issue
+  defp simple_update(conn, table, field, value) do
+    sql = "UPDATE #{table} SET #{field} = #{format_value(value)};"
+
+    case Duckdbex.query(conn, sql) do
+      {:ok, result} -> {:ok, {table, field, value, result}}
+      {:error, reason} -> {:error, {table, field, value, reason, sql}}
+    end
   end
 end
