@@ -91,6 +91,7 @@ defmodule IO.ExcelStreamer do
             {metadata.columns, columns_to_rows_stream(column_data)}
 
           {:rows, metadata, row_data} ->
+            # TODO: is this not a stream?
             {metadata.columns, row_data}
 
           :none ->
@@ -104,9 +105,26 @@ defmodule IO.ExcelStreamer do
       fn -> ref end,
       fn ref ->
         case Duckdbex.fetch_chunk(ref) do
-          [] -> {:halt, ref}
-          chunk when is_list(chunk) -> {chunk, ref}
-          {:error, reason} -> raise "Error fetching chunk: #{inspect(reason)}"
+          [] ->
+            {:halt, ref}
+
+          chunk when is_list(chunk) ->
+            # Transform the chunk to replace nil values with ""
+            transformed_chunk =
+              Enum.map(chunk, fn row ->
+                Enum.map(row, fn cell ->
+                  cond do
+                    cell == nil -> ""
+                    is_atom(cell) -> Atom.to_string(cell)
+                    true -> cell
+                  end
+                end)
+              end)
+
+            {transformed_chunk, ref}
+
+          {:error, reason} ->
+            raise "Error fetching chunk: #{inspect(reason)}"
         end
       end,
       fn _ref -> :ok end
@@ -117,6 +135,15 @@ defmodule IO.ExcelStreamer do
     column_data
     |> Enum.zip()
     |> Stream.map(&Tuple.to_list/1)
+    |> Stream.map(fn row ->
+      Enum.map(row, fn cell ->
+        cond do
+          cell == nil -> ""
+          is_atom(cell) -> Atom.to_string(cell)
+          true -> cell
+        end
+      end)
+    end)
   end
 
   defp stream_to_excel(columns, rows_stream, output_path, sheet_name) do

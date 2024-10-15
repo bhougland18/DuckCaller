@@ -29,6 +29,7 @@ defmodule DuckCaller do
   # TODO: does this need a prepared statement?
   defp import_extension!(conn, extension) do
     Duckdbex.query(conn, "INSTALL '#{extension}';")
+    Duckdbex.query(conn, "LOAD '#{extension}';")
   end
 
   @spec connect!() :: term()
