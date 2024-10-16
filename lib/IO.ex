@@ -11,10 +11,13 @@ defmodule DuckCaller.IO do
   def from_excel!(conn, path, sheets) when is_list(sheets),
     do: excel_sheets_to_table!(conn, path, sheets)
 
-  def from_excel!(conn, path, sheets) when is_binary(sheets),
-    do: excel_sheet_to_table!(conn, path, sheets)
+  def from_excel!(conn, path, sheets) when is_binary(sheets) do
+    Duckdbex.query(conn, "LOAD 'spatial';")
+    excel_sheet_to_table!(conn, path, sheets)
+  end
 
   defp excel_sheets_to_table!(conn, path, sheets) do
+    Duckdbex.query(conn, "LOAD 'spatial';")
     {:ok, Enum.each(sheets, fn s -> excel_sheet_to_table!(conn, path, s) end)}
   end
 
@@ -23,6 +26,7 @@ defmodule DuckCaller.IO do
     Duckdbex.query(
       conn,
       "CREATE TABLE #{sheet} AS SELECT * FROM st_read('#{path}', layer = '#{sheet}', open_options = ['HEADERS=FORCE']);"
+      # "CREATE TABLE #{sheet} AS SELECT * FROM st_read('#{path}', layer = '#{sheet}', open_options = ['HEADERS=FORCE', 'FIELD_TYPES=STRING']);"
     )
 
     {:ok, IO.puts("#{sheet} has been loaded into the database!")}

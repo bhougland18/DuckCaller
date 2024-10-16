@@ -87,27 +87,25 @@ defmodule DuckCaller do
     end
   end
 
-  def batch_update(conn, updates, opts \\ []) when is_list(updates) do
-    max_concurrency = Keyword.get(opts, :max_concurrency, System.schedulers_online() * 2)
-    timeout = Keyword.get(opts, :timeout, 30_000)
-
+  @doc """
+  Performs batch updates sequentially without concurrent processing.
+  This simpler version might be more reliable in some scenarios.
+  """
+  def batch_update(conn, updates) when is_list(updates) do
     transaction(conn, fn ->
       results =
-        Task.async_stream(
-          updates,
-          fn update_map ->
-            with {:ok, table} <- Map.fetch(update_map, :table),
-                 {:ok, field} <- Map.fetch(update_map, :field),
-                 {:ok, value} <- Map.fetch(update_map, :value) do
-              simple_update(conn, table, field, value)
-            else
-              :error -> {:error, {:missing_key, update_map}}
-            end
-          end,
-          max_concurrency: max_concurrency,
-          timeout: timeout
-        )
-        |> Enum.map(fn {:ok, result} -> result end)
+        Enum.map(updates, fn update_map ->
+          with {:ok, table} <- Map.fetch(update_map, :table),
+               {:ok, field} <- Map.fetch(update_map, :field),
+               {:ok, value} <- Map.fetch(update_map, :value),
+               true <- valid_identifier?(table),
+               true <- valid_identifier?(field) do
+            simple_update(conn, table, field, value)
+          else
+            :error -> {:error, {:missing_key, update_map}}
+            false -> {:error, {:invalid_identifier, update_map}}
+          end
+        end)
 
       failures =
         Enum.filter(results, fn
@@ -123,10 +121,21 @@ defmodule DuckCaller do
     end)
   end
 
+  # Updated format_value function with NULL handling
+  # Handle string "NULL"
+  defp format_value("NULL"), do: "NULL"
+  # Handle nil value
+  defp format_value(nil), do: "NULL"
   defp format_value(value) when is_binary(value), do: "'#{String.replace(value, "'", "''")}'"
   defp format_value(value), do: to_string(value)
 
-  # TODO: trade this out with AyeSQL query so we don't have injection attack issue
+  # Validate identifiers to prevent SQL injection
+  defp valid_identifier?(name) when is_binary(name) do
+    String.match?(name, ~r/^[a-zA-Z_][a-zA-Z0-9_]*$/)
+  end
+
+  defp valid_identifier?(_), do: false
+
   defp simple_update(conn, table, field, value) do
     sql = "UPDATE #{table} SET #{field} = #{format_value(value)};"
 
