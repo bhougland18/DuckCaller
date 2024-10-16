@@ -58,7 +58,7 @@ defmodule IO.ExcelStreamer do
   end
 
   def from_tabular_to_excel(tabular, output_path, sheet_name \\ "Tabular Data") do
-    case Table.Reader.init(tabular) do
+    case DuckCaller.Table.Reader.init(tabular) do
       {:columns, metadata, data} ->
         columns = metadata.columns
         rows_stream = columns_to_rows_stream(data)
@@ -91,8 +91,7 @@ defmodule IO.ExcelStreamer do
             {metadata.columns, columns_to_rows_stream(column_data)}
 
           {:rows, metadata, row_data} ->
-            # TODO: is this not a stream?
-            {metadata.columns, row_data}
+            {metadata.columns, rows_to_stream(row_data)}
 
           :none ->
             raise ArgumentError, "Invalid data format for sheet"
@@ -109,18 +108,7 @@ defmodule IO.ExcelStreamer do
             {:halt, ref}
 
           chunk when is_list(chunk) ->
-            # Transform the chunk to replace nil values with ""
-            transformed_chunk =
-              Enum.map(chunk, fn row ->
-                Enum.map(row, fn cell ->
-                  cond do
-                    cell == nil -> ""
-                    is_atom(cell) -> Atom.to_string(cell)
-                    true -> cell
-                  end
-                end)
-              end)
-
+            transformed_chunk = Enum.map(chunk, &transform_row/1)
             {transformed_chunk, ref}
 
           {:error, reason} ->
@@ -135,14 +123,20 @@ defmodule IO.ExcelStreamer do
     column_data
     |> Enum.zip()
     |> Stream.map(&Tuple.to_list/1)
-    |> Stream.map(fn row ->
-      Enum.map(row, fn cell ->
-        cond do
-          cell == nil -> ""
-          is_atom(cell) -> Atom.to_string(cell)
-          true -> cell
-        end
-      end)
+    |> Stream.map(&transform_row/1)
+  end
+
+  defp rows_to_stream(row_data) do
+    Stream.map(row_data, &transform_row/1)
+  end
+
+  defp transform_row(row) do
+    Enum.map(row, fn cell ->
+      cond do
+        cell == nil -> ""
+        is_atom(cell) -> Atom.to_string(cell)
+        true -> cell
+      end
     end)
   end
 

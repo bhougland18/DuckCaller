@@ -1,14 +1,17 @@
-defmodule Table do
+defmodule DuckCaller.Table do
   @moduledoc """
   Unified access to tabular data.
 
   This module provides a thin layer that unifies access to tabular data
   in different formats, supporting both row-based and column-based access.  This is an
-  implementation of the Table.Reader protocol.
+  implementation of the DuckCaller.Table.Reader protocol.
   """
 
   @type column :: term()
-  @type tabular :: Table.Reader.t() | Table.Reader.row_reader() | Table.Reader.column_reader()
+  @type tabular ::
+          DuckCaller.Table.Reader.t()
+          | DuckCaller.Table.Reader.row_reader()
+          | DuckCaller.Table.Reader.column_reader()
 
   @doc """
   Accesses tabular data as individual columns.
@@ -19,7 +22,7 @@ defmodule Table do
   """
   @spec to_columns(tabular(), keyword()) :: [{column(), [term()]}]
   def to_columns(tabular, opts \\ []) do
-    case Table.Reader.init(tabular) do
+    case DuckCaller.Table.Reader.init(tabular) do
       {:columns, metadata, data} ->
         columns = filter_columns(metadata.columns, opts[:only])
 
@@ -51,7 +54,7 @@ defmodule Table do
   """
   @spec to_rows(tabular(), keyword()) :: [[term()]] | Enumerable.t()
   def to_rows(tabular, opts \\ []) do
-    case Table.Reader.init(tabular) do
+    case DuckCaller.Table.Reader.init(tabular) do
       {:columns, metadata, data} ->
         columns = filter_columns(metadata.columns, opts[:only])
         column_data = Enum.to_list(data)
@@ -90,7 +93,7 @@ defmodule Table do
   end
 end
 
-defprotocol Table.Reader do
+defprotocol DuckCaller.Table.Reader do
   @moduledoc """
   Protocol for unified access to tabular data.
   """
@@ -101,14 +104,14 @@ defprotocol Table.Reader do
   @type metadata :: %{
           optional(:count) => non_neg_integer(),
           optional({term(), term()}) => any(),
-          :columns => [Table.column()]
+          :columns => [DuckCaller.Table.column()]
         }
 
   @spec init(t()) :: row_reader() | column_reader() | :none
   def init(tabular)
 end
 
-defimpl Table.Reader, for: List do
+defimpl DuckCaller.Table.Reader, for: List do
   def init(data) when is_list(data) and length(data) > 0 do
     cond do
       # List of matching key-value lists
@@ -135,7 +138,7 @@ defimpl Table.Reader, for: List do
   def init(_), do: :none
 end
 
-defimpl Table.Reader, for: Map do
+defimpl DuckCaller.Table.Reader, for: Map do
   def init(data) when is_map(data) and map_size(data) > 0 do
     if Enum.all?(data, fn {_k, v} -> is_list(v) end) do
       columns = Map.keys(data)
