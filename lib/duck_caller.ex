@@ -6,6 +6,9 @@ defmodule DuckCaller do
   @doc """
   Create a new DuckDB instance with two extensions, one for Excel and the other for Json.
   """
+
+  @default_log_path "duck_caller_errors.log"
+
   def create!(db_name, opts \\ [{:core_extensions, ["spatial", "json"]}]) do
     {:ok, conn} = connect!(db_name)
 
@@ -88,10 +91,39 @@ defmodule DuckCaller do
   end
 
   @doc """
-  Performs batch updates sequentially without concurrent processing.
-  This simpler version might be more reliable in some scenarios.
+  Executes SQL queries from a file within a transaction.
+  Returns {:ok, result} on success or {:error, reason} on failure.
+
+  ## Examples
+
+      iex> DuckCaller.execute_sql_file!(conn, "path/to/queries.sql")
+      {:ok, result}
   """
-  def batch_update(conn, updates) when is_list(updates) do
+  def execute_sql_file!(conn, file_path) do
+    transaction(conn, fn ->
+      case File.read(file_path) do
+        {:ok, sql_content} ->
+          # query! returns the result directly, not in a tuple
+          result = DuckCaller.query!(conn, sql_content)
+          {:ok, result}
+
+        {:error, reason} ->
+          {:error, {:file_error, reason, file_path}}
+      end
+    end)
+  end
+
+  @doc """
+  Performs batch updates sequentially without concurrent processing.
+  The updates argument takes a list of maps with the following fields:
+    * :table
+    * :field
+    * :value
+  """
+  def execute_batch_update(conn, updates, opts \\ []) when is_list(updates) do
+    log_path = Keyword.get(opts, :log_path, @default_log_path)
+    timestamp = NaiveDateTime.local_now() |> NaiveDateTime.to_string()
+
     transaction(conn, fn ->
       results =
         Enum.map(updates, fn update_map ->
@@ -116,9 +148,84 @@ defmodule DuckCaller do
       if Enum.empty?(failures) do
         {:ok, results}
       else
+        log_errors(failures, timestamp, log_path)
         {:error, failures}
       end
     end)
+  end
+
+  defp log_errors(failures, timestamp, log_path) do
+    error_text = format_errors(failures, timestamp)
+
+    # Ensure directory exists
+    log_dir = Path.dirname(log_path)
+    File.mkdir_p!(log_dir)
+
+    # Append errors to log file
+    File.write!(log_path, error_text, [:append])
+  end
+
+  defp format_errors(failures, timestamp) do
+    header = """
+
+    =====================================
+    Error Report - #{timestamp}
+    =====================================
+
+    """
+
+    error_details =
+      Enum.map_join(failures, "\n", fn
+        {:error, {:missing_key, update_map}} ->
+          """
+          Error Type: Missing Required Key
+          Update Attempted: #{inspect(update_map)}
+          Missing Keys: #{identify_missing_keys(update_map)}
+          """
+
+        {:error, {:invalid_identifier, update_map}} ->
+          """
+          Error Type: Invalid Identifier
+          Update Attempted: #{inspect(update_map)}
+          Invalid Fields: #{identify_invalid_identifiers(update_map)}
+          """
+
+        {:error, {table, field, value, reason, sql}} ->
+          """
+          Error Type: SQL Execution Error
+          Table: #{table}
+          Field: #{field}
+          Value: #{inspect(value)}
+          SQL: #{sql}
+          Error Message: #{inspect(reason)}
+          """
+
+        other_error ->
+          """
+          Error Type: Unexpected Error
+          Details: #{inspect(other_error)}
+          """
+      end)
+
+    header <> error_details
+  end
+
+  defp identify_missing_keys(update_map) do
+    required_keys = [:table, :field, :value]
+    missing = required_keys -- Map.keys(update_map)
+    Enum.join(missing, ", ")
+  end
+
+  defp identify_invalid_identifiers(update_map) do
+    invalid =
+      Enum.filter([:table, :field], fn key ->
+        case Map.get(update_map, key) do
+          nil -> false
+          value -> not valid_identifier?(value)
+        end
+      end)
+
+    Enum.join(invalid, ", ")
   end
 
   # Updated format_value function with NULL handling
