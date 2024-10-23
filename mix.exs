@@ -3,7 +3,7 @@ defmodule DuckCaller.MixProject do
 
   def project do
     [
-      app: :infor_dmf,
+      app: :duck_caller,
       version: "0.1.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,

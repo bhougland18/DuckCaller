@@ -133,9 +133,23 @@ defmodule IO.ExcelStreamer do
   defp transform_row(row) do
     Enum.map(row, fn cell ->
       cond do
-        cell == nil -> ""
-        is_atom(cell) -> Atom.to_string(cell)
-        true -> cell
+        cell == nil ->
+          ""
+
+        is_atom(cell) ->
+          Atom.to_string(cell)
+
+        is_tuple(cell) and tuple_size(cell) == 3 and
+            Enum.all?(Tuple.to_list(cell), &is_integer/1) ->
+          # Convert tuple {year, month, day} to Date
+          case Date.new(elem(cell, 0), elem(cell, 1), elem(cell, 2)) do
+            {:ok, date} -> date
+            # If not a valid date, return the original tuple
+            _ -> cell
+          end
+
+        true ->
+          cell
       end
     end)
   end

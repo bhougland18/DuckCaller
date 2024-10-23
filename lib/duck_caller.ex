@@ -9,7 +9,7 @@ defmodule DuckCaller do
 
   @default_log_path "duck_caller_errors.log"
 
-  def create!(db_name, opts \\ [{:core_extensions, ["spatial", "json"]}]) do
+  def create!(db_name, opts \\ [{:core_extensions, ["spatial", "json", "httpfs"]}]) do
     {:ok, conn} = connect!(db_name)
 
     if opts[:core_extensions] do
@@ -228,23 +228,31 @@ defmodule DuckCaller do
     Enum.join(invalid, ", ")
   end
 
+  # Helper function to format identifiers with double quotes around the entire name
+  defp format_identifier(name) when is_binary(name) do
+    ~s("#{name}")
+  end
+
   # Updated format_value function with NULL handling
-  # Handle string "NULL"
   defp format_value("NULL"), do: "NULL"
-  # Handle nil value
   defp format_value(nil), do: "NULL"
   defp format_value(value) when is_binary(value), do: "'#{String.replace(value, "'", "''")}'"
   defp format_value(value), do: to_string(value)
 
-  # Validate identifiers to prevent SQL injection
+  # Updated valid_identifier to handle period-separated identifiers
   defp valid_identifier?(name) when is_binary(name) do
-    String.match?(name, ~r/^[a-zA-Z_][a-zA-Z0-9_]*$/)
+    name
+    |> String.split(".")
+    |> Enum.all?(fn part -> String.match?(part, ~r/^[a-zA-Z_][a-zA-Z0-9_]*$/) end)
   end
 
   defp valid_identifier?(_), do: false
 
+  # Updated simple_update with quoted identifiers
   defp simple_update(conn, table, field, value) do
-    sql = "UPDATE #{table} SET #{field} = #{format_value(value)};"
+    quoted_table = format_identifier(table)
+    quoted_field = format_identifier(field)
+    sql = "UPDATE #{quoted_table} SET #{quoted_field} = #{format_value(value)};"
 
     case Duckdbex.query(conn, sql) do
       {:ok, result} -> {:ok, {table, field, value, result}}

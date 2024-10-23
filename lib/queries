@@ -1,0 +1,7 @@
+defmodule Queries do
+    import AyeSQL, only: [defqueries: 3]
+
+
+    defqueries(Queries, "../resources/queries/core.sql", repo: DuckCaller)
+
+end

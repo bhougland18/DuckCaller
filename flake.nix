@@ -44,7 +44,6 @@
              elixir-ls
              glibcLocales
              livebook
-             duckdb
              # mix needs it for downloading dependencies
              git
              # probably needed for your Phoenix assets
