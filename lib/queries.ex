@@ -1,7 +1,7 @@
 defmodule DuckCaller.Queries do
   use AyeSQL, runner: AyeSQL.Runner.Duckdbex
 
-  defqueries("../resources/queries/core.sql")
+  defqueries("resources/queries/core.sql")
 
   @doc """
   Runs an AyeSQL query with the given name and parameters.
